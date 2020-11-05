@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/Android25_SQL_Spinner.iml" filepath="$PROJECT_DIR$/.idea/modules/Android25_SQL_Spinner.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/Android25_SQL_Spinner.app.iml" filepath="$PROJECT_DIR$/.idea/modules/app/Android25_SQL_Spinner.app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/Android26_SQL_Spinner_ImageView.iml" filepath="$PROJECT_DIR$/.idea/modules/Android26_SQL_Spinner_ImageView.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/Android26_SQL_Spinner_ImageView.app.iml" filepath="$PROJECT_DIR$/.idea/modules/app/Android26_SQL_Spinner_ImageView.app.iml" />
     </modules>
   </component>
 </project>

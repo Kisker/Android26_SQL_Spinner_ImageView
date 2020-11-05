@@ -1,16 +1,25 @@
 package rs.aleph.android.example25.activities;
 
+import android.Manifest;
 import android.app.Dialog;
 import android.app.FragmentTransaction;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.database.Cursor;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -18,6 +27,7 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
@@ -63,13 +73,18 @@ public class MainActivity extends AppCompatActivity implements OnProductSelected
 
     private AlertDialog dialog;
 
-    private boolean landscapeMode = false;
     private boolean listShown = false;
     private boolean detailShown = false;
 
     private int productId = 0;
 
     private DatabaseHelper databaseHelper;
+    //*Prvi korak - u sklopu zadatka 26 dodajemo cetiri nove metode. Pre nego sto krenemo da radimo, moramo u Manifestu iskazati permisije
+    //koje ce nam dozvoliti da koristimo kameru, odnosno galeriju slika - READ_EXTERNAL_STORAGE i WRITE_EXTERNAL_STORAGE
+    private ImageView preview;
+    private String imagePath = null;
+    private static final String TAG = "PERMISSIONS";
+    private static final int SELECT_PICTURE = 1;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -135,7 +150,6 @@ public class MainActivity extends AppCompatActivity implements OnProductSelected
         }
 
         if (findViewById(R.id.displayDetail) != null) {
-            landscapeMode = true;
             getFragmentManager().popBackStack();
 
             DetailFragment detailFragment = (DetailFragment) getFragmentManager().findFragmentById(R.id.displayDetail);
@@ -154,6 +168,91 @@ public class MainActivity extends AppCompatActivity implements OnProductSelected
         productId = 0;
 
         addInitCateogry();
+       }
+
+       //*Drugi korak Termin 26 - odredimo metodu reset
+    private void reset(){
+        imagePath = "";
+        preview = null;
+    }
+
+    //*Treci korak - sa ovom metodom, koja je ujedno sablon, dajemo mogucnost korisniku da na dugme Choose otvori kameru,
+    //odnosno galeriju slika te uradi odabir image file-a. Takodje moramo odrediti da li je Build verzija veca od 23!
+    public  boolean isStoragePermissionGranted() {
+        if (Build.VERSION.SDK_INT >= 23) {
+            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED &&
+                    checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+                            == PackageManager.PERMISSION_GRANTED) {
+                Log.v(TAG,"Permission is granted");
+                return true;
+            } else {
+
+                Log.v(TAG,"Permission is revoked");
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                        Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
+                return false;
+            }
+        }
+        else { //permission is automatically granted on sdk<23 upon installation
+            Log.v(TAG,"Permission is granted");
+            return true;
+        }
+    }
+    //U okviru treceg koraka, uvek moramo ugraditi interface odnosno poziv na to da li je permisija bila uspesna
+    //This interface is the contract for receiving the results for permission requests.
+    //Callback for the result from requesting permissions.
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if(grantResults[0]== PackageManager.PERMISSION_GRANTED
+                && grantResults[1] == PackageManager.PERMISSION_GRANTED){
+            Log.v(TAG,"Permission: "+permissions[0]+ "was "+grantResults[0]);
+        }
+    }
+ // *Cetvrti korak Termin 26 - metoda selectPicture koja sa startActivityForResult pozivom usmerava ka drugoj aktivnosti
+    //u ovom slucaju pristup kameri, slikama, itd
+    private void selectPicture(){
+        if (isStoragePermissionGranted()) {
+            Intent i = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            startActivityForResult(i, SELECT_PICTURE);
+        }
+    }
+//*Peti korak Termin 26, koji je ujedno i deo cetvrtog, jeste interface onActivityResult koji nam vraca vrednosti prvoj aktivnosto
+    //sto je u ovom slucaju kamera i samo slikanje sa kamerom
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+//RESULT_OK oznacava da je korisnik potvrdio i izabrao sliku, te vrednost te data uvek mora bit vracena
+        if (requestCode == SELECT_PICTURE && resultCode == RESULT_OK && null != data) {
+            //Uri - jedinstveni identifikator slike
+            Uri selectedImage = data.getData();
+            //filePathColumn (koji se nalazi na Cursor-u) - putanja gde se slike tocno nalaze preko Media.DATA.
+            String[] filePathColumn = { MediaStore.Images.Media.DATA };
+//Cursor je dvodimenzionalni element, koji nam oznacava gde se sta nalazi te vraca kolekciju trazenih podataka sa strane vaseg upita
+            //Cursor je interface
+            if (selectedImage != null) {
+                Cursor cursor = getContentResolver().query(selectedImage, filePathColumn, null, null, null);
+               //Obvezno proveriti da li je cursor vracen
+                if (cursor != null) {
+                    cursor.moveToFirst();
+
+                    int columnIndex = cursor.getColumnIndex(filePathColumn[0]);
+                    //Sa getString mi cuvamo putanju na disku i posle toga uvek zatvorimo cursor, a sa
+                    //imagePath mi cuvamo apsolutnu (krajnju) putanju na disku
+                    imagePath = cursor.getString(columnIndex);
+                    cursor.close();
+
+                    // String picturePath contains the path of selected Image
+                    //Posto je slika bitmapirana stvar, uvek koristi BitmapFactory.decodeFile
+                    if (preview != null) {
+                        preview.setImageBitmap(BitmapFactory.decodeFile(imagePath));
+                    }
+
+                    Toast.makeText(this, imagePath, Toast.LENGTH_SHORT).show();
+                }
+            }
+        }
     }
 
     //Primenom metode addInitCategory voditi racuna da prilikom promene imena naziva kategorije, morate promeniti ime baza
@@ -183,18 +282,34 @@ public class MainActivity extends AppCompatActivity implements OnProductSelected
 
     //da bi dodali podatak u bazu, potrebno je da napravimo objekat klase addItem i njene metode
     //koji reprezentuje tabelu i popunimo podacima
+//    private void addItem() throws SQLException {
+//        final Dialog dialog = new Dialog(this);
+//        dialog.setContentView(R.layout.dialog_layout);
+
+//        final Spinner imagesSpinner = (Spinner) dialog.findViewById(R.id.product_image);
+//        List<String> imagesList = new ArrayList<String>();
+//        imagesList.add("borat.jpg");
+//        imagesList.add("borat1.jpg");
+//        imagesList.add("borat2.jpg");
+//        ArrayAdapter<String> imagesAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, imagesList);
+//        imagesSpinner.setAdapter(imagesAdapter);
+//        imagesSpinner.setSelection(0);
+
+
     private void addItem() throws SQLException {
         final Dialog dialog = new Dialog(this);
         dialog.setContentView(R.layout.dialog_layout);
 
-        final Spinner imagesSpinner = (Spinner) dialog.findViewById(R.id.product_image);
-        List<String> imagesList = new ArrayList<String>();
-        imagesList.add("borat.jpg");
-        imagesList.add("borat1.jpg");
-        imagesList.add("borat2.jpg");
-        ArrayAdapter<String> imagesAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, imagesList);
-        imagesSpinner.setAdapter(imagesAdapter);
-        imagesSpinner.setSelection(0);
+        Button choosebtn = (Button) dialog.findViewById(R.id.choose);
+        choosebtn.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                preview = (ImageView) dialog.findViewById(R.id.preview_image);
+                selectPicture();
+            }
+        });
+
 
 // Final metoda categorySpinner je za razliku od prethodne povezanna sa klasom DatabaseHelper i preko nje pozivamo da nam sacuva
         //izmene na dialog spinner-u. U slucaju da ne pozovemo getDatabaseHelper().getCategoryDao().queryForAll() nasa aplikacija
@@ -228,20 +343,23 @@ public class MainActivity extends AppCompatActivity implements OnProductSelected
                     float price = Float.parseFloat(productRating.getText().toString());
 
                     Category category = (Category) productsSpinner.getSelectedItem();
-                    String image = (String) imagesSpinner.getSelectedItem();
+                   // String image = (String) imagesSpinner.getSelectedItem();
 
 
                     Product product = new Product();
                     product.setmName(name);
                     product.setDescription(desct);
                     product.setRating(price);
-                    product.setImage(image);
+                    product.setImage(imagePath);
                     product.setCategory(category);
 
                     getDatabaseHelper().getProductDao().create(product);
                     refresh();
                     Toast.makeText(MainActivity.this, "Product inserted", Toast.LENGTH_SHORT).show();
                     dialog.dismiss();
+                    //reset(), kog smo odredili u prvom koraku Termin 26 moramo postaviti ovde. On oznaca da ce nam
+                    //sve nase podatke resetovati i vratit natrag ka pocetnoj poziciji
+                    reset();
 
                 }catch (NumberFormatException e){
                     Toast.makeText(MainActivity.this, "Rating mora biti broj", Toast.LENGTH_SHORT).show();
